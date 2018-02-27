@@ -14,7 +14,6 @@
 package com.facebook.presto.sql.planner.iterative;
 
 import com.facebook.presto.Session;
-import com.facebook.presto.cost.CostProvider;
 import com.facebook.presto.cost.StatsProvider;
 import com.facebook.presto.matching.Captures;
 import com.facebook.presto.matching.Pattern;
@@ -51,8 +50,6 @@ public interface Rule<T>
         Session getSession();
 
         StatsProvider getStatsProvider();
-
-        CostProvider getCostProvider();
     }
 
     final class Result

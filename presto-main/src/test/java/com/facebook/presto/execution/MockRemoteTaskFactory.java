@@ -259,7 +259,7 @@ public class MockRemoteTaskFactory
                     stats.getRunningPartitionedDrivers(),
                     false,
                     stats.getPhysicalWrittenDataSize(),
-                    stats.getUserMemoryReservation(),
+                    stats.getMemoryReservation(),
                     stats.getSystemMemoryReservation());
         }
 

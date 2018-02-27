@@ -52,9 +52,9 @@ public class StageStats
     private final int blockedDrivers;
     private final int completedDrivers;
 
-    private final double cumulativeUserMemory;
-    private final DataSize userMemoryReservation;
-    private final DataSize peakUserMemoryReservation;
+    private final double cumulativeMemory;
+    private final DataSize totalMemoryReservation;
+    private final DataSize peakMemoryReservation;
 
     private final Duration totalScheduledTime;
     private final Duration totalCpuTime;
@@ -92,9 +92,9 @@ public class StageStats
         this.runningDrivers = 0;
         this.blockedDrivers = 0;
         this.completedDrivers = 0;
-        this.cumulativeUserMemory = 0.0;
-        this.userMemoryReservation = null;
-        this.peakUserMemoryReservation = null;
+        this.cumulativeMemory = 0.0;
+        this.totalMemoryReservation = null;
+        this.peakMemoryReservation = null;
         this.totalScheduledTime = null;
         this.totalCpuTime = null;
         this.totalUserTime = null;
@@ -130,9 +130,9 @@ public class StageStats
             @JsonProperty("blockedDrivers") int blockedDrivers,
             @JsonProperty("completedDrivers") int completedDrivers,
 
-            @JsonProperty("cumulativeUserMemory") double cumulativeUserMemory,
-            @JsonProperty("userMemoryReservation") DataSize userMemoryReservation,
-            @JsonProperty("peakUserMemoryReservation") DataSize peakUserMemoryReservation,
+            @JsonProperty("cumulativeMemory") double cumulativeMemory,
+            @JsonProperty("totalMemoryReservation") DataSize totalMemoryReservation,
+            @JsonProperty("peakMemoryReservation") DataSize peakMemoryReservation,
 
             @JsonProperty("totalScheduledTime") Duration totalScheduledTime,
             @JsonProperty("totalCpuTime") Duration totalCpuTime,
@@ -178,9 +178,9 @@ public class StageStats
         checkArgument(completedDrivers >= 0, "completedDrivers is negative");
         this.completedDrivers = completedDrivers;
 
-        this.cumulativeUserMemory = requireNonNull(cumulativeUserMemory, "cumulativeUserMemory is null");
-        this.userMemoryReservation = requireNonNull(userMemoryReservation, "userMemoryReservation is null");
-        this.peakUserMemoryReservation = requireNonNull(peakUserMemoryReservation, "peakUserMemoryReservation is null");
+        this.cumulativeMemory = requireNonNull(cumulativeMemory, "cumulativeMemory is null");
+        this.totalMemoryReservation = requireNonNull(totalMemoryReservation, "totalMemoryReservation is null");
+        this.peakMemoryReservation = requireNonNull(peakMemoryReservation, "peakMemoryReservation is null");
 
         this.totalScheduledTime = requireNonNull(totalScheduledTime, "totalScheduledTime is null");
         this.totalCpuTime = requireNonNull(totalCpuTime, "totalCpuTime is null");
@@ -280,21 +280,21 @@ public class StageStats
     }
 
     @JsonProperty
-    public double getCumulativeUserMemory()
+    public double getCumulativeMemory()
     {
-        return cumulativeUserMemory;
+        return cumulativeMemory;
     }
 
     @JsonProperty
-    public DataSize getUserMemoryReservation()
+    public DataSize getTotalMemoryReservation()
     {
-        return userMemoryReservation;
+        return totalMemoryReservation;
     }
 
     @JsonProperty
-    public DataSize getPeakUserMemoryReservation()
+    public DataSize getPeakMemoryReservation()
     {
-        return peakUserMemoryReservation;
+        return peakMemoryReservation;
     }
 
     @JsonProperty

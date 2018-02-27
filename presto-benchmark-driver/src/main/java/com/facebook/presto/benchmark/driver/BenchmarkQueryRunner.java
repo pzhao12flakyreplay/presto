@@ -43,7 +43,6 @@ import static com.facebook.presto.benchmark.driver.BenchmarkQueryResult.passResu
 import static com.facebook.presto.client.OkHttpUtil.setupCookieJar;
 import static com.facebook.presto.client.OkHttpUtil.setupSocksProxy;
 import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Verify.verify;
 import static io.airlift.http.client.HttpUriBuilder.uriBuilderFrom;
 import static io.airlift.http.client.JsonResponseHandler.createJsonResponseHandler;
 import static io.airlift.http.client.Request.Builder.prepareGet;
@@ -201,24 +200,19 @@ public class BenchmarkQueryRunner
         // start query
         try (StatementClient client = new StatementClient(okHttpClient, session, query)) {
             // read query output
-            while (client.isRunning()) {
+            while (client.isValid() && client.advance()) {
                 queryDataConsumer.accept(client.currentData());
-
-                if (!client.advance()) {
-                    break;
-                }
             }
 
             // verify final state
-            if (client.isClientAborted()) {
+            if (client.isClosed()) {
                 throw new IllegalStateException("Query aborted by user");
             }
 
-            if (client.isClientError()) {
+            if (client.isGone()) {
                 throw new IllegalStateException("Query is gone (server restarted?)");
             }
 
-            verify(client.isFinished());
             QueryError resultsError = client.finalStatusInfo().getError();
             if (resultsError != null) {
                 queryErrorConsumer.accept(resultsError);

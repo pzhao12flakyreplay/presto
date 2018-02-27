@@ -28,11 +28,6 @@ import java.util.Set;
 
 public interface JdbcClient
 {
-    default boolean schemaExists(String schema)
-    {
-        return getSchemaNames().contains(schema);
-    }
-
     Set<String> getSchemaNames();
 
     List<SchemaTableName> getTableNames(@Nullable String schema);

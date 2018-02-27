@@ -14,7 +14,6 @@
 package com.facebook.presto.cost;
 
 import java.util.Objects;
-import java.util.function.Function;
 
 import static com.google.common.base.MoreObjects.toStringHelper;
 import static com.google.common.base.Preconditions.checkArgument;
@@ -25,14 +24,6 @@ import static java.lang.String.format;
 public class SymbolStatsEstimate
 {
     public static final SymbolStatsEstimate UNKNOWN_STATS = SymbolStatsEstimate.builder().build();
-
-    public static final SymbolStatsEstimate ZERO_STATS = SymbolStatsEstimate.builder()
-            .setLowValue(NaN)
-            .setHighValue(NaN)
-            .setDistinctValuesCount(0)
-            .setNullsFraction(1)
-            .setAverageRowSize(0)
-            .build();
 
     // for now we support only types which map to real domain naturally and keep low/high value as double in stats.
     private final double lowValue;
@@ -55,8 +46,8 @@ public class SymbolStatsEstimate
                 (0 <= nullsFraction && nullsFraction <= 1.) || isNaN(nullsFraction),
                 "Nulls fraction should be within [0, 1] or NaN, got: %s",
                 nullsFraction);
-        boolean isEmptyRange = isNaN(lowValue) && isNaN(highValue);
-        this.nullsFraction = isEmptyRange ? 1.0 : nullsFraction;
+        // TODO normalize nullsFraction for an empty range (or validate it is already normalized)
+        this.nullsFraction = nullsFraction;
 
         checkArgument(averageRowSize >= 0 || isNaN(averageRowSize), "Average row size should be non-negative or NaN, got: %s", averageRowSize);
         this.averageRowSize = averageRowSize;
@@ -83,12 +74,10 @@ public class SymbolStatsEstimate
 
     public double getNullsFraction()
     {
+        if (isRangeEmpty()) {
+            return 1.0;
+        }
         return nullsFraction;
-    }
-
-    public StatisticRange statisticRange()
-    {
-        return new StatisticRange(lowValue, highValue, distinctValuesCount);
     }
 
     public double getValuesFraction()
@@ -106,26 +95,6 @@ public class SymbolStatsEstimate
         return distinctValuesCount;
     }
 
-    public SymbolStatsEstimate mapLowValue(Function<Double, Double> mappingFunction)
-    {
-        return buildFrom(this).setLowValue(mappingFunction.apply(lowValue)).build();
-    }
-
-    public SymbolStatsEstimate mapHighValue(Function<Double, Double> mappingFunction)
-    {
-        return buildFrom(this).setHighValue(mappingFunction.apply(highValue)).build();
-    }
-
-    public SymbolStatsEstimate mapNullsFraction(Function<Double, Double> mappingFunction)
-    {
-        return buildFrom(this).setNullsFraction(mappingFunction.apply(nullsFraction)).build();
-    }
-
-    public SymbolStatsEstimate mapDistinctValuesCount(Function<Double, Double> mappingFunction)
-    {
-        return buildFrom(this).setDistinctValuesCount(mappingFunction.apply(distinctValuesCount)).build();
-    }
-
     @Override
     public boolean equals(Object o)
     {
@@ -136,11 +105,11 @@ public class SymbolStatsEstimate
             return false;
         }
         SymbolStatsEstimate that = (SymbolStatsEstimate) o;
-        return Double.compare(nullsFraction, that.nullsFraction) == 0 &&
-                Double.compare(averageRowSize, that.averageRowSize) == 0 &&
-                Double.compare(distinctValuesCount, that.distinctValuesCount) == 0 &&
-                Double.compare(lowValue, that.lowValue) == 0 &&
-                Double.compare(highValue, that.highValue) == 0;
+        return Double.compare(that.nullsFraction, nullsFraction) == 0 &&
+                Double.compare(that.averageRowSize, averageRowSize) == 0 &&
+                Double.compare(that.distinctValuesCount, distinctValuesCount) == 0 &&
+                Objects.equals(lowValue, that.lowValue) &&
+                Objects.equals(highValue, that.highValue);
     }
 
     @Override
@@ -182,13 +151,6 @@ public class SymbolStatsEstimate
         private double nullsFraction = NaN;
         private double averageRowSize = NaN;
         private double distinctValuesCount = NaN;
-
-        public Builder setStatisticsRange(StatisticRange range)
-        {
-            return setLowValue(range.getLow())
-                    .setHighValue(range.getHigh())
-                    .setDistinctValuesCount(range.getDistinctValuesCount());
-        }
 
         public Builder setLowValue(double lowValue)
         {

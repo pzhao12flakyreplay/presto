@@ -27,7 +27,6 @@ import io.airlift.json.JsonModule;
 import io.airlift.node.testing.TestingNodeModule;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Test;
 
 import javax.inject.Singleton;
 
@@ -41,7 +40,6 @@ import static com.google.common.io.RecursiveDeleteOption.ALLOW_INSECURE;
 import static com.google.inject.util.Modules.override;
 import static io.airlift.jaxrs.JaxrsBinder.jaxrsBinder;
 
-@Test(singleThreaded = true)
 public class TestHttpBackupStore
         extends AbstractTestBackupStore<BackupStore>
 {

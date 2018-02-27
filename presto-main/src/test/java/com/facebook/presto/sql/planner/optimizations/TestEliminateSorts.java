@@ -93,7 +93,6 @@ public class TestEliminateSorts
                 new IterativeOptimizer(
                         new StatsRecorder(),
                         getQueryRunner().getStatsCalculator(),
-                        getQueryRunner().getCostCalculator(),
                         ImmutableSet.of(new RemoveRedundantIdentityProjections())));
 
         assertPlan(sql, pattern, optimizers);

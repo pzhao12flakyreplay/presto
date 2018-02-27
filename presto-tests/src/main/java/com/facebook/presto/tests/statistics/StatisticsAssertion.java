@@ -14,33 +14,42 @@
 
 package com.facebook.presto.tests.statistics;
 
-import com.facebook.presto.testing.QueryRunner;
+import com.facebook.presto.Session;
+import com.facebook.presto.cost.CachingStatsProvider;
+import com.facebook.presto.cost.PlanNodeStatsEstimate;
+import com.facebook.presto.cost.StatsProvider;
+import com.facebook.presto.execution.StageInfo;
+import com.facebook.presto.spi.QueryId;
+import com.facebook.presto.sql.planner.Plan;
+import com.facebook.presto.sql.planner.plan.OutputNode;
+import com.facebook.presto.sql.planner.plan.PlanNode;
+import com.facebook.presto.sql.planner.plan.PlanNodeId;
+import com.facebook.presto.tests.DistributedQueryRunner;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.TreeTraverser;
 import org.intellij.lang.annotations.Language;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Consumer;
+import java.util.Map;
+import java.util.function.Predicate;
 
-import static com.facebook.presto.tests.statistics.MetricComparator.getMetricComparisons;
+import static com.facebook.presto.tests.statistics.MetricComparator.createMetricComparisons;
 import static com.facebook.presto.tests.statistics.MetricComparison.Result.MATCH;
 import static com.facebook.presto.tests.statistics.MetricComparison.Result.NO_BASELINE;
 import static com.facebook.presto.tests.statistics.MetricComparison.Result.NO_ESTIMATE;
-import static com.facebook.presto.tests.statistics.MetricComparisonStrategies.noError;
-import static com.facebook.presto.tests.statistics.Metrics.distinctValuesCount;
-import static com.facebook.presto.tests.statistics.Metrics.highValue;
-import static com.facebook.presto.tests.statistics.Metrics.lowValue;
-import static com.facebook.presto.tests.statistics.Metrics.nullsFraction;
-import static com.google.common.base.Verify.verify;
-import static com.google.common.collect.ImmutableList.toImmutableList;
+import static com.facebook.presto.tests.statistics.MetricComparisonStrategies.defaultTolerance;
+import static com.facebook.presto.transaction.TransactionBuilder.transaction;
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static java.util.Objects.requireNonNull;
 import static org.testng.Assert.assertTrue;
 
 public class StatisticsAssertion
         implements AutoCloseable
 {
-    private final QueryRunner runner;
+    private final DistributedQueryRunner runner;
 
-    public StatisticsAssertion(QueryRunner runner)
+    public StatisticsAssertion(DistributedQueryRunner runner)
     {
         this.runner = requireNonNull(runner, "runner is null");
     }
@@ -51,84 +60,60 @@ public class StatisticsAssertion
         runner.close();
     }
 
-    public void check(@Language("SQL") String query, Consumer<Checks> checksBuilderConsumer)
+    public Result check(@Language("SQL") String query)
     {
-        Checks checks = new Checks();
-        checksBuilderConsumer.accept(checks);
-        checks.run(query, runner);
+        return transaction(runner.getTransactionManager(), runner.getAccessControl())
+                .singleStatement()
+                .execute(runner.getDefaultSession(), (Session session) -> new Result(metricComparisons(session, query)));
     }
 
-    private static class MetricsCheck
+    private List<MetricComparison> metricComparisons(Session session, @Language("SQL") String query)
     {
-        public final Metric metric;
-        public final MetricComparisonStrategy strategy;
-        public final MetricComparison.Result expectedComparisonResult;
+        String queryId = runner.executeWithQueryId(session, query).getQueryId();
+        Plan queryPlan = runner.getQueryPlan(new QueryId(queryId));
+        StageInfo stageInfo = runner.getQueryInfo(new QueryId(queryId)).getOutputStage().get();
 
-        MetricsCheck(Metric metric, MetricComparisonStrategy strategy, MetricComparison.Result expectedComparisonResult)
-        {
-            this.metric = metric;
-            this.strategy = strategy;
-            this.expectedComparisonResult = expectedComparisonResult;
-        }
+        StatsProvider statsProvider = new CachingStatsProvider(runner.getStatsCalculator(), session, queryPlan.getTypes());
+        ImmutableMap<PlanNodeId, PlanNodeStatsEstimate> estimates = TreeTraverser.using(PlanNode::getSources)
+                .preOrderTraversal(queryPlan.getRoot())
+                .stream()
+                .collect(toImmutableMap(PlanNode::getId, statsProvider::getStats));
+        return createMetricComparisons(queryPlan, estimates, stageInfo);
     }
 
-    public static class Checks
+    public static class Result
     {
-        private final List<MetricsCheck> checks = new ArrayList<>();
+        private final Map<Metric, MetricComparison> outputNodeMetricComparisons;
 
-        public Checks verifyExactColumnStatistics(String columnName)
+        public Result(List<MetricComparison> metricComparisons)
         {
-            verifyColumnStatistics(columnName, noError());
-            return this;
+            requireNonNull(metricComparisons, "metricComparisons can not be null");
+            this.outputNodeMetricComparisons = metricComparisons.stream()
+                    .filter(metricComparison -> metricComparison.getPlanNode() instanceof OutputNode)
+                    .collect(toImmutableMap(MetricComparison::getMetric, metricComparison -> metricComparison));
+            checkArgument(outputNodeMetricComparisons.size() == Metric.values().length, "Expected all metrics for OutputNode");
         }
 
-        public Checks verifyColumnStatistics(String columnName, MetricComparisonStrategy strategy)
+        public Result estimate(Metric metric, MetricComparisonStrategy strategy)
         {
-            estimate(nullsFraction(columnName), strategy);
-            estimate(distinctValuesCount(columnName), strategy);
-            estimate(lowValue(columnName), strategy);
-            estimate(highValue(columnName), strategy);
-            return this;
+            return testMetrics(metric, metricComparison -> metricComparison.result(strategy) == MATCH);
         }
 
-        public Checks verifyCharacterColumnStatistics(String columnName, MetricComparisonStrategy strategy)
+        public Result noEstimate(Metric metric)
         {
-            estimate(nullsFraction(columnName), strategy);
-            estimate(distinctValuesCount(columnName), strategy);
-            // currently we do not support low/high values for char/varchar in stats calculations
-            return this;
+            return testMetrics(metric, metricComparison -> metricComparison.result(defaultTolerance()) == NO_ESTIMATE);
         }
 
-        public Checks estimate(Metric metric, MetricComparisonStrategy strategy)
+        public Result noBaseline(Metric metric)
         {
-            checks.add(new MetricsCheck(metric, strategy, MATCH));
-            return this;
+            return testMetrics(metric, metricComparison -> metricComparison.result(defaultTolerance()) == NO_BASELINE);
         }
 
-        public Checks noEstimate(Metric metric)
+        private Result testMetrics(Metric metric, Predicate<MetricComparison> assertCondition)
         {
-            checks.add(new MetricsCheck(metric, (actual, estimate) -> true, NO_ESTIMATE));
+            MetricComparison metricComparison = outputNodeMetricComparisons.get(metric);
+            assertTrue(assertCondition.test(metricComparison), "Following metrics do not match: " + metricComparison);
             return this;
-        }
-
-        public Checks noBaseline(Metric metric)
-        {
-            checks.add(new MetricsCheck(metric, (actual, estimate) -> true, NO_BASELINE));
-            return this;
-        }
-
-        void run(@Language("SQL") String query, QueryRunner runner)
-        {
-            List<Metric> metrics = checks.stream()
-                    .map(check -> check.metric)
-                    .collect(toImmutableList());
-            List<MetricComparison> metricComparisons = getMetricComparisons(query, runner, metrics);
-            verify(checks.size() == metricComparisons.size());
-            for (int i = 0; i < checks.size(); i++) {
-                MetricsCheck check = checks.get(i);
-                MetricComparison metricComparison = metricComparisons.get(i);
-                assertTrue(metricComparison.result(check.strategy) == check.expectedComparisonResult, "Metric doesn't match: " + metricComparison);
-            }
         }
     }
 }

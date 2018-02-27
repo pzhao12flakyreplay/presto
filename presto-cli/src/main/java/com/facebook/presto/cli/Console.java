@@ -38,7 +38,6 @@ import java.io.UncheckedIOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 
@@ -56,12 +55,10 @@ import static com.facebook.presto.sql.parser.StatementSplitter.isEmptyStatement;
 import static com.facebook.presto.sql.parser.StatementSplitter.squeezeStatement;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.io.ByteStreams.nullOutputStream;
-import static com.google.common.util.concurrent.Uninterruptibles.awaitUninterruptibly;
 import static java.lang.Integer.parseInt;
 import static java.lang.String.format;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Locale.ENGLISH;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static jline.internal.Configuration.getUserHome;
 
@@ -112,19 +109,11 @@ public class Console
             }
         }
 
-        // abort any running query if the CLI is terminated
         AtomicBoolean exiting = new AtomicBoolean();
-        ThreadInterruptor interruptor = new ThreadInterruptor();
-        CountDownLatch exited = new CountDownLatch(1);
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            exiting.set(true);
-            interruptor.interrupt();
-            awaitUninterruptibly(exited, EXIT_DELAY.toMillis(), MILLISECONDS);
-        }));
+        interruptThreadOnExit(Thread.currentThread(), exiting);
 
         try (QueryRunner queryRunner = new QueryRunner(
                 session,
-                clientOptions.debug,
                 Optional.ofNullable(clientOptions.socksProxy),
                 Optional.ofNullable(clientOptions.httpProxy),
                 Optional.ofNullable(clientOptions.keystorePath),
@@ -146,10 +135,6 @@ public class Console
 
             runConsole(queryRunner, exiting);
             return true;
-        }
-        finally {
-            exited.countDown();
-            interruptor.close();
         }
     }
 
@@ -303,7 +288,7 @@ public class Console
         }
         catch (QueryPreprocessorException e) {
             System.err.println(e.getMessage());
-            if (queryRunner.isDebug()) {
+            if (queryRunner.getSession().isDebug()) {
                 e.printStackTrace();
             }
             return false;
@@ -352,7 +337,7 @@ public class Console
         }
         catch (RuntimeException e) {
             System.err.println("Error running command: " + e.getMessage());
-            if (queryRunner.isDebug()) {
+            if (queryRunner.getSession().isDebug()) {
                 e.printStackTrace();
             }
             return false;
@@ -406,5 +391,18 @@ public class Console
             System.setOut(out);
             System.setErr(err);
         }
+    }
+
+    private static void interruptThreadOnExit(Thread thread, AtomicBoolean exiting)
+    {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            exiting.set(true);
+            thread.interrupt();
+            try {
+                thread.join(EXIT_DELAY.toMillis());
+            }
+            catch (InterruptedException ignored) {
+            }
+        }));
     }
 }

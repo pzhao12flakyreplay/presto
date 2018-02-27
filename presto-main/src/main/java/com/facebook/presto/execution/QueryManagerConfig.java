@@ -48,6 +48,7 @@ public class QueryManagerConfig
 
     private int queryManagerExecutorPoolSize = 5;
 
+    private Duration remoteTaskMinErrorDuration = new Duration(2, TimeUnit.MINUTES);
     private Duration remoteTaskMaxErrorDuration = new Duration(5, TimeUnit.MINUTES);
     private int remoteTaskMaxCallbackThreads = 1000;
 
@@ -210,16 +211,17 @@ public class QueryManagerConfig
         return this;
     }
 
-    @Deprecated
+    @NotNull
+    @MinDuration("1s")
     public Duration getRemoteTaskMinErrorDuration()
     {
-        return remoteTaskMaxErrorDuration;
+        return remoteTaskMinErrorDuration;
     }
 
-    @Deprecated
     @Config("query.remote-task.min-error-duration")
     public QueryManagerConfig setRemoteTaskMinErrorDuration(Duration remoteTaskMinErrorDuration)
     {
+        this.remoteTaskMinErrorDuration = remoteTaskMinErrorDuration;
         return this;
     }
 

@@ -61,12 +61,6 @@ public class JdbcMetadata
     }
 
     @Override
-    public boolean schemaExists(ConnectorSession session, String schemaName)
-    {
-        return jdbcClient.schemaExists(schemaName);
-    }
-
-    @Override
     public List<String> listSchemaNames(ConnectorSession session)
     {
         return ImmutableList.copyOf(jdbcClient.getSchemaNames());

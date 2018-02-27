@@ -57,7 +57,6 @@ public final class Decimals
 
     static {
         for (int i = 0; i < LONG_POWERS_OF_TEN.length; ++i) {
-            // Although this computes using doubles, incidentally, this is exact for all powers of 10 that fit in a long.
             LONG_POWERS_OF_TEN[i] = round(pow(10, i));
         }
 
@@ -149,22 +148,6 @@ public final class Decimals
         return unscaledDecimal(unscaledValue);
     }
 
-    public static long encodeShortScaledValue(BigDecimal value, int scale)
-    {
-        checkArgument(scale >= 0);
-        return value.setScale(scale, UNNECESSARY).unscaledValue().longValueExact();
-    }
-
-    public static Slice encodeScaledValue(BigDecimal value, int scale)
-    {
-        checkArgument(scale >= 0);
-        return encodeScaledValue(value.setScale(scale, UNNECESSARY));
-    }
-
-    /**
-     * Converts {@link BigDecimal} to {@link Slice} representing it for long {@link DecimalType}.
-     * It is caller responsibility to ensure that {@code value.scale()} equals to {@link DecimalType#getScale()}.
-     */
     public static Slice encodeScaledValue(BigDecimal value)
     {
         return encodeUnscaledValue(value.unscaledValue());
@@ -307,12 +290,5 @@ public final class Decimals
     public static boolean isLongDecimal(Type type)
     {
         return type instanceof LongDecimalType;
-    }
-
-    private static void checkArgument(boolean condition)
-    {
-        if (!condition) {
-            throw new IllegalArgumentException();
-        }
     }
 }

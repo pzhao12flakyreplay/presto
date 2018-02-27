@@ -148,14 +148,6 @@ String Functions
 
     Converts ``string`` to uppercase.
 
-.. function:: word_stem(word) -> varchar
-
-    Returns the stem of ``word`` in the English language.
-
-.. function:: word_stem(word, lang) -> varchar
-
-    Returns the stem of ``word`` in the ``lang`` language.
-
 Unicode Functions
 -----------------
 

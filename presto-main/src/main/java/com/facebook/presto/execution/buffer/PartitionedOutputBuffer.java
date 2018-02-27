@@ -105,7 +105,7 @@ public class PartitionedOutputBuffer
     @Override
     public boolean isOverutilized()
     {
-        return memoryManager.isOverutilized();
+        return memoryManager.isFull();
     }
 
     @Override

@@ -15,10 +15,12 @@ package com.facebook.presto.rcfile;
 
 import io.airlift.slice.Slice;
 
+import java.io.IOException;
+
 public interface RcFileDecompressor
 {
     void decompress(Slice compressed, Slice uncompressed)
-            throws RcFileCorruptionException;
+            throws IOException;
 
     void destroy();
 }

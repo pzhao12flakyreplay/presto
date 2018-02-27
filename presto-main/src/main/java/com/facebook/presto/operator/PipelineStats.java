@@ -52,7 +52,7 @@ public class PipelineStats
     private final int blockedDrivers;
     private final int completedDrivers;
 
-    private final DataSize userMemoryReservation;
+    private final DataSize memoryReservation;
     private final DataSize revocableMemoryReservation;
     private final DataSize systemMemoryReservation;
 
@@ -99,7 +99,7 @@ public class PipelineStats
             @JsonProperty("blockedDrivers") int blockedDrivers,
             @JsonProperty("completedDrivers") int completedDrivers,
 
-            @JsonProperty("userMemoryReservation") DataSize userMemoryReservation,
+            @JsonProperty("memoryReservation") DataSize memoryReservation,
             @JsonProperty("revocableMemoryReservation") DataSize revocableMemoryReservation,
             @JsonProperty("systemMemoryReservation") DataSize systemMemoryReservation,
 
@@ -151,7 +151,7 @@ public class PipelineStats
         checkArgument(completedDrivers >= 0, "completedDrivers is negative");
         this.completedDrivers = completedDrivers;
 
-        this.userMemoryReservation = requireNonNull(userMemoryReservation, "userMemoryReservation is null");
+        this.memoryReservation = requireNonNull(memoryReservation, "memoryReservation is null");
         this.revocableMemoryReservation = requireNonNull(revocableMemoryReservation, "revocableMemoryReservation is null");
         this.systemMemoryReservation = requireNonNull(systemMemoryReservation, "systemMemoryReservation is null");
 
@@ -265,9 +265,9 @@ public class PipelineStats
     }
 
     @JsonProperty
-    public DataSize getUserMemoryReservation()
+    public DataSize getMemoryReservation()
     {
-        return userMemoryReservation;
+        return memoryReservation;
     }
 
     @JsonProperty
@@ -400,7 +400,7 @@ public class PipelineStats
                 runningPartitionedDrivers,
                 blockedDrivers,
                 completedDrivers,
-                userMemoryReservation,
+                memoryReservation,
                 revocableMemoryReservation,
                 systemMemoryReservation,
                 queuedTime,

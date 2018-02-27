@@ -329,12 +329,12 @@ public class RcFileReader
         }
 
         // read uncompressed size of row group (which is useless information)
-        verify(input.remaining() >= SIZE_OF_INT, "RCFile truncated %s", dataSource.getId());
+        verify(input.remaining() >= SIZE_OF_INT, "RCFile truncated %s", dataSource);
         int unusedRowGroupSize = Integer.reverseBytes(input.readInt());
 
         // read sequence sync if present
         if (unusedRowGroupSize == -1) {
-            verify(input.remaining() >= SIZE_OF_LONG + SIZE_OF_LONG + SIZE_OF_INT, "RCFile truncated %s", dataSource.getId());
+            verify(input.remaining() >= SIZE_OF_LONG + SIZE_OF_LONG + SIZE_OF_INT, "RCFile truncated %s", dataSource);
 
             // The full sync sequence is "0xFFFFFFFF syncFirst syncSecond".  If
             // this sequence begins in our segment, we must continue process until the
@@ -347,7 +347,7 @@ public class RcFileReader
                 return -1;
             }
 
-            verify(syncFirst == input.readLong() && syncSecond == input.readLong(), "Invalid sync in RCFile %s", dataSource.getId());
+            verify(syncFirst == input.readLong() && syncSecond == input.readLong(), "Invalid sync in RCFile %s", dataSource);
 
             // read the useless uncompressed length
             unusedRowGroupSize = Integer.reverseBytes(input.readInt());
@@ -378,7 +378,7 @@ public class RcFileReader
             header = buffer;
         }
         else {
-            verify(compressedHeaderSize == uncompressedHeaderSize, "Invalid RCFile %s", dataSource.getId());
+            verify(compressedHeaderSize == uncompressedHeaderSize, "Invalid RCFile %s", dataSource);
             header = compressedHeaderBuffer;
         }
         BasicSliceInput headerInput = header.getInput();
@@ -396,7 +396,7 @@ public class RcFileReader
             totalCompressedDataSize += compressedDataSize;
             int uncompressedDataSize = toIntExact(readVInt(headerInput));
             if (decompressor == null && compressedDataSize != uncompressedDataSize) {
-                throw corrupt("Invalid RCFile %s", dataSource.getId());
+                throw corrupt("Invalid RCFile %s", dataSource);
             }
 
             int lengthsSize = toIntExact(readVInt(headerInput));
@@ -433,11 +433,6 @@ public class RcFileReader
         }
 
         return columns[columnIndex].readBlock(rowGroupPosition, currentChunkRowCount);
-    }
-
-    public RcFileDataSourceId getId()
-    {
-        return dataSource.getId();
     }
 
     private void seekToFirstRowGroupInRange(long offset, long length)

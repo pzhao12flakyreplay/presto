@@ -28,7 +28,7 @@ public class QueryQueueFullException
     public QueryQueueFullException(ResourceGroupId resourceGroup)
     {
         super(QUERY_QUEUE_FULL, format("Too many queued queries for \"%s\"", resourceGroup));
-        this.resourceGroup = requireNonNull(resourceGroup, "resourceGroup is null");
+        this.resourceGroup = requireNonNull(resourceGroup, "resouceGroup is null");
     }
 
     public ResourceGroupId getResourceGroup()

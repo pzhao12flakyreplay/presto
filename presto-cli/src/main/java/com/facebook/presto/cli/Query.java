@@ -43,7 +43,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.facebook.presto.cli.ConsolePrinter.REAL_TERMINAL;
 import static com.google.common.base.Preconditions.checkState;
-import static com.google.common.base.Verify.verify;
 import static java.lang.String.format;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Objects.requireNonNull;
@@ -56,13 +55,12 @@ public class Query
     private static final Signal SIGINT = new Signal("INT");
 
     private final AtomicBoolean ignoreUserInterrupt = new AtomicBoolean();
+    private final AtomicBoolean userAbortedQuery = new AtomicBoolean();
     private final StatementClient client;
-    private final boolean debug;
 
-    public Query(StatementClient client, boolean debug)
+    public Query(StatementClient client)
     {
         this.client = requireNonNull(client, "client is null");
-        this.debug = debug;
     }
 
     public Optional<String> getSetCatalog()
@@ -109,9 +107,10 @@ public class Query
     {
         Thread clientThread = Thread.currentThread();
         SignalHandler oldHandler = Signal.handle(SIGINT, signal -> {
-            if (ignoreUserInterrupt.get() || client.isClientAborted()) {
+            if (ignoreUserInterrupt.get() || client.isClosed()) {
                 return;
             }
+            userAbortedQuery.set(true);
             client.close();
             clientThread.interrupt();
         });
@@ -131,16 +130,15 @@ public class Query
         PrintStream errorChannel = interactive ? out : System.err;
 
         if (interactive) {
-            statusPrinter = new StatusPrinter(client, out, debug);
+            statusPrinter = new StatusPrinter(client, out);
             statusPrinter.printInitialStatusUpdates();
         }
         else {
             waitForData();
         }
 
-        // if running or finished
-        if (client.isRunning() || (client.isFinished() && client.finalStatusInfo().getError() == null)) {
-            QueryStatusInfo results = client.isRunning() ? client.currentStatusInfo() : client.finalStatusInfo();
+        if ((!client.isFailed()) && (!client.isGone()) && (!client.isClosed())) {
+            QueryStatusInfo results = client.isValid() ? client.currentStatusInfo() : client.finalStatusInfo();
             if (results.getUpdateType() != null) {
                 renderUpdate(errorChannel, results);
             }
@@ -153,23 +151,19 @@ public class Query
             }
         }
 
-        checkState(!client.isRunning());
-
         if (statusPrinter != null) {
             statusPrinter.printFinalInfo();
         }
 
-        if (client.isClientAborted()) {
+        if (client.isClosed()) {
             errorChannel.println("Query aborted by user");
             return false;
         }
-        if (client.isClientError()) {
+        if (client.isGone()) {
             errorChannel.println("Query is gone (server restarted?)");
             return false;
         }
-
-        verify(client.isFinished());
-        if (client.finalStatusInfo().getError() != null) {
+        if (client.isFailed()) {
             renderFailure(errorChannel);
             return false;
         }
@@ -179,7 +173,7 @@ public class Query
 
     private void waitForData()
     {
-        while (client.isRunning() && (client.currentData().getData() == null)) {
+        while (client.isValid() && (client.currentData().getData() == null)) {
             client.advance();
         }
     }
@@ -243,6 +237,7 @@ public class Query
                 ignoreUserInterrupt.set(true);
                 pager.getFinishFuture().thenRun(() -> {
                     ignoreUserInterrupt.set(false);
+                    userAbortedQuery.set(true);
                     client.close();
                     clientThread.interrupt();
                 });
@@ -250,7 +245,9 @@ public class Query
             handler.processRows(client);
         }
         catch (RuntimeException | IOException e) {
-            if (client.isClientAborted() && !(e instanceof QueryAbortedException)) {
+            // clear interrupt flag before throwing an exception
+            Thread.interrupted();
+            if (userAbortedQuery.get() && !(e instanceof QueryAbortedException)) {
                 throw new QueryAbortedException(e);
             }
             throw e;
@@ -309,7 +306,7 @@ public class Query
         checkState(error != null);
 
         out.printf("Query %s failed: %s%n", results.getId(), error.getMessage());
-        if (debug && (error.getFailureInfo() != null)) {
+        if (client.isDebug() && (error.getFailureInfo() != null)) {
             error.getFailureInfo().toException().printStackTrace(out);
         }
         if (error.getErrorLocation() != null) {
@@ -353,6 +350,26 @@ public class Query
             String padding = Strings.repeat(" ", prefix.length() + (location.getColumnNumber() - 1));
             out.println(prefix + errorLine);
             out.println(padding + "^");
+        }
+    }
+
+    private static class ThreadInterruptor
+            implements Closeable
+    {
+        private final Thread thread = Thread.currentThread();
+        private final AtomicBoolean processing = new AtomicBoolean(true);
+
+        public synchronized void interrupt()
+        {
+            if (processing.get()) {
+                thread.interrupt();
+            }
+        }
+
+        @Override
+        public synchronized void close()
+        {
+            processing.set(false);
         }
     }
 }

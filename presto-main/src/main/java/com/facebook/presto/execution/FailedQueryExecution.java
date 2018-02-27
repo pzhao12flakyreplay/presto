@@ -90,7 +90,7 @@ public class FailedQueryExecution
     }
 
     @Override
-    public long getUserMemoryReservation()
+    public long getTotalMemoryReservation()
     {
         return 0;
     }

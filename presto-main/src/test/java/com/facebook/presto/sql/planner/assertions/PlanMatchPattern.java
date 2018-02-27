@@ -14,13 +14,13 @@
 package com.facebook.presto.sql.planner.assertions;
 
 import com.facebook.presto.Session;
+import com.facebook.presto.cost.PlanNodeStatsEstimate;
 import com.facebook.presto.cost.StatsProvider;
 import com.facebook.presto.metadata.Metadata;
 import com.facebook.presto.spi.block.SortOrder;
 import com.facebook.presto.spi.predicate.Domain;
 import com.facebook.presto.sql.parser.SqlParser;
 import com.facebook.presto.sql.planner.Symbol;
-import com.facebook.presto.sql.planner.iterative.GroupReference;
 import com.facebook.presto.sql.planner.plan.AggregationNode;
 import com.facebook.presto.sql.planner.plan.AggregationNode.Step;
 import com.facebook.presto.sql.planner.plan.ApplyNode;
@@ -67,8 +67,6 @@ import java.util.stream.IntStream;
 
 import static com.facebook.presto.spi.block.SortOrder.ASC_NULLS_FIRST;
 import static com.facebook.presto.spi.block.SortOrder.ASC_NULLS_LAST;
-import static com.facebook.presto.spi.block.SortOrder.DESC_NULLS_FIRST;
-import static com.facebook.presto.spi.block.SortOrder.DESC_NULLS_LAST;
 import static com.facebook.presto.sql.ExpressionUtils.rewriteIdentifiersToSymbolReferences;
 import static com.facebook.presto.sql.planner.assertions.MatchResult.NO_MATCH;
 import static com.facebook.presto.sql.planner.assertions.MatchResult.match;
@@ -77,7 +75,6 @@ import static com.facebook.presto.sql.planner.assertions.StrictSymbolsMatcher.ac
 import static com.facebook.presto.sql.tree.SortItem.NullOrdering.FIRST;
 import static com.facebook.presto.sql.tree.SortItem.NullOrdering.UNDEFINED;
 import static com.facebook.presto.sql.tree.SortItem.Ordering.ASCENDING;
-import static com.facebook.presto.sql.tree.SortItem.Ordering.DESCENDING;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
@@ -464,20 +461,10 @@ public final class PlanMatchPattern
                 states.add(new PlanMatchingState(ImmutableList.of(this)));
             }
         }
-        if (node instanceof GroupReference) {
-            if (sourcePatterns.isEmpty() && shapeMatchesMatchers(node)) {
-                states.add(new PlanMatchingState(ImmutableList.of()));
-            }
-        }
-        else if (node.getSources().size() == sourcePatterns.size() && shapeMatchesMatchers(node)) {
+        if (node.getSources().size() == sourcePatterns.size() && matchers.stream().allMatch(it -> it.shapeMatches(node))) {
             states.add(new PlanMatchingState(sourcePatterns));
         }
         return states.build();
-    }
-
-    private boolean shapeMatchesMatchers(PlanNode node)
-    {
-        return matchers.stream().allMatch(it -> it.shapeMatches(node));
     }
 
     MatchResult detailMatches(PlanNode node, StatsProvider stats, Session session, Metadata metadata, SymbolAliases symbolAliases)
@@ -567,9 +554,9 @@ public final class PlanMatchPattern
         return this;
     }
 
-    public PlanMatchPattern withOutputRowCount(double expectedOutputRowCount)
+    public PlanMatchPattern withStats(PlanNodeStatsEstimate stats)
     {
-        matchers.add(new StatsOutputRowCountMatcher(expectedOutputRowCount));
+        matchers.add(new PlanStatsMatcher(stats));
         return this;
     }
 
@@ -766,12 +753,11 @@ public final class PlanMatchPattern
                 }
             }
             else {
-                checkState(ordering == DESCENDING);
                 if (nullOrdering == FIRST) {
-                    return DESC_NULLS_FIRST;
+                    return ASC_NULLS_FIRST;
                 }
                 else {
-                    return DESC_NULLS_LAST;
+                    return ASC_NULLS_LAST;
                 }
             }
         }

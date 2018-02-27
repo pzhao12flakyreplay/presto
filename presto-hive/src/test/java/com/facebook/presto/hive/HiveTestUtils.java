@@ -26,10 +26,7 @@ import com.facebook.presto.hive.s3.S3ConfigurationUpdater;
 import com.facebook.presto.metadata.FunctionRegistry;
 import com.facebook.presto.spi.ColumnHandle;
 import com.facebook.presto.spi.ConnectorSession;
-import com.facebook.presto.spi.type.ArrayType;
 import com.facebook.presto.spi.type.MapType;
-import com.facebook.presto.spi.type.NamedTypeSignature;
-import com.facebook.presto.spi.type.RowType;
 import com.facebook.presto.spi.type.StandardTypes;
 import com.facebook.presto.spi.type.Type;
 import com.facebook.presto.spi.type.TypeSignatureParameter;
@@ -41,8 +38,6 @@ import com.google.common.collect.ImmutableSet;
 
 import java.util.List;
 import java.util.Set;
-
-import static java.util.stream.Collectors.toList;
 
 public final class HiveTestUtils
 {
@@ -123,21 +118,5 @@ public final class HiveTestUtils
         return (MapType) TYPE_MANAGER.getParameterizedType(StandardTypes.MAP, ImmutableList.of(
                 TypeSignatureParameter.of(keyType.getTypeSignature()),
                 TypeSignatureParameter.of(valueType.getTypeSignature())));
-    }
-
-    public static ArrayType arrayType(Type elementType)
-    {
-        return (ArrayType) TYPE_MANAGER.getParameterizedType(
-                StandardTypes.ARRAY,
-                ImmutableList.of(TypeSignatureParameter.of(elementType.getTypeSignature())));
-    }
-
-    public static RowType rowType(List<NamedTypeSignature> elementTypeSignatures)
-    {
-        return (RowType) TYPE_MANAGER.getParameterizedType(
-                StandardTypes.ROW,
-                ImmutableList.copyOf(elementTypeSignatures.stream()
-                        .map(TypeSignatureParameter::of)
-                        .collect(toList())));
     }
 }

@@ -89,7 +89,7 @@ public class DataDefinitionExecution<T extends Statement>
     }
 
     @Override
-    public long getUserMemoryReservation()
+    public long getTotalMemoryReservation()
     {
         return 0;
     }

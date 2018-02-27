@@ -75,12 +75,6 @@ public class FileRcFileDataSource
     }
 
     @Override
-    public RcFileDataSourceId getId()
-    {
-        return new RcFileDataSourceId(path.getPath());
-    }
-
-    @Override
     public String toString()
     {
         return path.getPath();

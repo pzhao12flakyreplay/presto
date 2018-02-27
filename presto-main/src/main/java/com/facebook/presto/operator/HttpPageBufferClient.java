@@ -80,6 +80,7 @@ import static io.airlift.http.client.StatusResponseHandler.createStatusResponseH
 import static java.lang.String.format;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Objects.requireNonNull;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
@@ -145,18 +146,20 @@ public final class HttpPageBufferClient
     public HttpPageBufferClient(
             HttpClient httpClient,
             DataSize maxResponseSize,
+            Duration minErrorDuration,
             Duration maxErrorDuration,
             URI location,
             ClientCallback clientCallback,
             ScheduledExecutorService scheduler,
             Executor pageBufferClientCallbackExecutor)
     {
-        this(httpClient, maxResponseSize, maxErrorDuration, location, clientCallback, scheduler, Ticker.systemTicker(), pageBufferClientCallbackExecutor);
+        this(httpClient, maxResponseSize, minErrorDuration, maxErrorDuration, location, clientCallback, scheduler, Ticker.systemTicker(), pageBufferClientCallbackExecutor);
     }
 
     public HttpPageBufferClient(
             HttpClient httpClient,
             DataSize maxResponseSize,
+            Duration minErrorDuration,
             Duration maxErrorDuration,
             URI location,
             ClientCallback clientCallback,
@@ -170,9 +173,18 @@ public final class HttpPageBufferClient
         this.clientCallback = requireNonNull(clientCallback, "clientCallback is null");
         this.scheduler = requireNonNull(scheduler, "scheduler is null");
         this.pageBufferClientCallbackExecutor = requireNonNull(pageBufferClientCallbackExecutor, "pageBufferClientCallbackExecutor is null");
+        requireNonNull(minErrorDuration, "minErrorDuration is null");
         requireNonNull(maxErrorDuration, "maxErrorDuration is null");
         requireNonNull(ticker, "ticker is null");
-        this.backoff = new Backoff(maxErrorDuration, ticker);
+        this.backoff = new Backoff(
+                minErrorDuration,
+                maxErrorDuration,
+                ticker,
+                new Duration(0, MILLISECONDS),
+                new Duration(50, MILLISECONDS),
+                new Duration(100, MILLISECONDS),
+                new Duration(200, MILLISECONDS),
+                new Duration(500, MILLISECONDS));
     }
 
     public synchronized PageBufferClientStatus getStatus()
@@ -370,12 +382,11 @@ public final class HttpPageBufferClient
 
                 t = rewriteException(t);
                 if (!(t instanceof PrestoException) && backoff.failure()) {
-                    String message = format("%s (%s - %s failures, failure duration %s, total failed request time %s)",
+                    String message = format("%s (%s - %s failures, time since last success %s)",
                             WORKER_NODE_ERROR,
                             uri,
                             backoff.getFailureCount(),
-                            backoff.getFailureDuration().convertTo(SECONDS),
-                            backoff.getFailureRequestTimeTotal().convertTo(SECONDS));
+                            backoff.getTimeSinceLastSuccess().convertTo(SECONDS));
                     t = new PageTransportTimeoutException(fromUri(uri), message, t);
                 }
                 handleFailure(t, resultFuture);
@@ -412,11 +423,10 @@ public final class HttpPageBufferClient
 
                 log.error("Request to delete %s failed %s", location, t);
                 if (!(t instanceof PrestoException) && backoff.failure()) {
-                    String message = format("Error closing remote buffer (%s - %s failures, failure duration %s, total failed request time %s)",
+                    String message = format("Error closing remote buffer (%s - %s failures, time since last success %s)",
                             location,
                             backoff.getFailureCount(),
-                            backoff.getFailureDuration().convertTo(SECONDS),
-                            backoff.getFailureRequestTimeTotal().convertTo(SECONDS));
+                            backoff.getTimeSinceLastSuccess().convertTo(SECONDS));
                     t = new PrestoException(REMOTE_BUFFER_CLOSE_FAILED, message, t);
                 }
                 handleFailure(t, resultFuture);

@@ -13,20 +13,18 @@
  */
 package com.facebook.presto.tests;
 
-import com.facebook.presto.spi.QueryId;
-
 public class ResultWithQueryId<T>
 {
-    private final QueryId queryId;
+    private final String queryId;
     private final T result;
 
-    public ResultWithQueryId(QueryId queryId, T result)
+    public ResultWithQueryId(String queryId, T result)
     {
         this.queryId = queryId;
         this.result = result;
     }
 
-    public QueryId getQueryId()
+    public String getQueryId()
     {
         return queryId;
     }

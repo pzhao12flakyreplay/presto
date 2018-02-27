@@ -30,11 +30,6 @@ import com.facebook.presto.connector.system.SchemaPropertiesSystemTable;
 import com.facebook.presto.connector.system.TablePropertiesSystemTable;
 import com.facebook.presto.connector.system.TransactionsSystemTable;
 import com.facebook.presto.cost.CoefficientBasedStatsCalculator;
-import com.facebook.presto.cost.CostCalculator;
-import com.facebook.presto.cost.CostCalculatorUsingExchanges;
-import com.facebook.presto.cost.CostCalculatorWithEstimatedExchanges;
-import com.facebook.presto.cost.CostComparator;
-import com.facebook.presto.cost.SelectingStatsCalculator;
 import com.facebook.presto.cost.StatsCalculator;
 import com.facebook.presto.execution.CommitTask;
 import com.facebook.presto.execution.CreateTableTask;
@@ -43,7 +38,6 @@ import com.facebook.presto.execution.DataDefinitionTask;
 import com.facebook.presto.execution.DeallocateTask;
 import com.facebook.presto.execution.DropTableTask;
 import com.facebook.presto.execution.DropViewTask;
-import com.facebook.presto.execution.Lifespan;
 import com.facebook.presto.execution.NodeTaskMap;
 import com.facebook.presto.execution.PrepareTask;
 import com.facebook.presto.execution.QueryManagerConfig;
@@ -92,7 +86,6 @@ import com.facebook.presto.operator.index.IndexJoinLookupStats;
 import com.facebook.presto.operator.project.InterpretedPageProjection;
 import com.facebook.presto.operator.project.PageProcessor;
 import com.facebook.presto.operator.project.PageProjection;
-import com.facebook.presto.server.ServerMainModule;
 import com.facebook.presto.spi.ColumnHandle;
 import com.facebook.presto.spi.ColumnMetadata;
 import com.facebook.presto.spi.ConnectorPageSource;
@@ -123,6 +116,7 @@ import com.facebook.presto.sql.gen.JoinCompiler;
 import com.facebook.presto.sql.gen.JoinFilterFunctionCompiler;
 import com.facebook.presto.sql.gen.PageFunctionCompiler;
 import com.facebook.presto.sql.parser.SqlParser;
+import com.facebook.presto.sql.planner.CompilerConfig;
 import com.facebook.presto.sql.planner.LocalExecutionPlanner;
 import com.facebook.presto.sql.planner.LocalExecutionPlanner.LocalExecutionPlan;
 import com.facebook.presto.sql.planner.LogicalPlanner;
@@ -195,7 +189,6 @@ import static com.facebook.presto.execution.SqlQueryManager.validateParameters;
 import static com.facebook.presto.operator.PipelineExecutionStrategy.GROUPED_EXECUTION;
 import static com.facebook.presto.spi.connector.ConnectorSplitManager.SplitSchedulingStrategy.GROUPED_SCHEDULING;
 import static com.facebook.presto.spi.connector.ConnectorSplitManager.SplitSchedulingStrategy.UNGROUPED_SCHEDULING;
-import static com.facebook.presto.spi.connector.NotPartitionedPartitionHandle.NOT_PARTITIONED;
 import static com.facebook.presto.spi.type.BigintType.BIGINT;
 import static com.facebook.presto.sql.ParsingUtil.createParsingOptions;
 import static com.facebook.presto.sql.testing.TreeAssertions.assertFormattedSql;
@@ -228,8 +221,6 @@ public class LocalQueryRunner
     private final PageIndexerFactory pageIndexerFactory;
     private final MetadataManager metadata;
     private final StatsCalculator statsCalculator;
-    private final CostCalculator costCalculator;
-    private final CostCalculator estimatedExchangesCostCalculator;
     private final TestingAccessControlManager accessControl;
     private final SplitManager splitManager;
     private final BlockEncodingSerde blockEncodingSerde;
@@ -258,7 +249,8 @@ public class LocalQueryRunner
     {
         this(
                 defaultSession,
-                new FeaturesConfig(),
+                new FeaturesConfig()
+                        .setOptimizeMixedDistinctAggregations(true),
                 false,
                 false);
     }
@@ -266,7 +258,8 @@ public class LocalQueryRunner
     public LocalQueryRunner(Session defaultSession, boolean alwaysRevokeMemory)
     {
         this(defaultSession,
-                new FeaturesConfig(),
+                new FeaturesConfig()
+                        .setOptimizeMixedDistinctAggregations(true),
                 false,
                 alwaysRevokeMemory);
     }
@@ -323,11 +316,7 @@ public class LocalQueryRunner
                 new SchemaPropertyManager(),
                 new TablePropertyManager(),
                 transactionManager);
-        this.statsCalculator = new SelectingStatsCalculator(
-                new CoefficientBasedStatsCalculator(metadata),
-                ServerMainModule.createNewStatsCalculator(metadata));
-        this.costCalculator = new CostCalculatorUsingExchanges(this::getNodeCount);
-        this.estimatedExchangesCostCalculator = new CostCalculatorWithEstimatedExchanges(costCalculator, this::getNodeCount);
+        this.statsCalculator = new CoefficientBasedStatsCalculator(metadata);
         this.accessControl = new TestingAccessControlManager(transactionManager);
         this.pageSourceManager = new PageSourceManager();
 
@@ -459,16 +448,6 @@ public class LocalQueryRunner
     public StatsCalculator getStatsCalculator()
     {
         return statsCalculator;
-    }
-
-    public CostCalculator getCostCalculator()
-    {
-        return costCalculator;
-    }
-
-    public CostCalculator getEstimatedExchangesCostCalculator()
-    {
-        return estimatedExchangesCostCalculator;
     }
 
     @Override
@@ -642,7 +621,7 @@ public class LocalQueryRunner
         Plan plan = createPlan(session, sql);
 
         if (printPlan) {
-            System.out.println(PlanPrinter.textLogicalPlan(plan.getRoot(), plan.getTypes(), metadata, statsCalculator, estimatedExchangesCostCalculator, session));
+            System.out.println(PlanPrinter.textLogicalPlan(plan.getRoot(), plan.getTypes(), metadata, statsCalculator, session));
         }
 
         SubPlan subplan = PlanFragmenter.createSubPlans(session, metadata, nodePartitioningManager, plan, true);
@@ -654,7 +633,6 @@ public class LocalQueryRunner
                 metadata,
                 sqlParser,
                 statsCalculator,
-                costCalculator,
                 Optional.empty(),
                 pageSourceManager,
                 indexManager,
@@ -665,6 +643,7 @@ public class LocalQueryRunner
                 pageFunctionCompiler,
                 joinFilterFunctionCompiler,
                 new IndexJoinLookupStats(),
+                new CompilerConfig().setInterpreterEnabled(false), // make sure tests fail if compiler breaks
                 new TaskManagerConfig().setTaskConcurrency(4),
                 spillerFactory,
                 singleStreamSpillerFactory,
@@ -698,7 +677,7 @@ public class LocalQueryRunner
 
             ImmutableSet.Builder<ScheduledSplit> scheduledSplits = ImmutableSet.builder();
             while (!splitSource.isFinished()) {
-                for (Split split : getNextBatch(splitSource)) {
+                for (Split split : getFutureValue(splitSource.getNextBatch(1000))) {
                     scheduledSplits.add(new ScheduledSplit(sequenceId++, tableScan.getId(), split));
                 }
             }
@@ -741,7 +720,6 @@ public class LocalQueryRunner
         return ImmutableList.copyOf(drivers);
     }
 
-    @Override
     public Plan createPlan(Session session, @Language("SQL") String sql)
     {
         return createPlan(session, sql, LogicalPlanner.Stage.OPTIMIZED_AND_VALIDATED);
@@ -766,16 +744,7 @@ public class LocalQueryRunner
         FeaturesConfig featuresConfig = new FeaturesConfig()
                 .setDistributedIndexJoinsEnabled(false)
                 .setOptimizeHashGeneration(true);
-        return new PlanOptimizers(
-                metadata,
-                sqlParser,
-                featuresConfig,
-                forceSingleNode,
-                new MBeanExporter(new TestingMBeanServer()),
-                statsCalculator,
-                costCalculator,
-                estimatedExchangesCostCalculator,
-                new CostComparator(featuresConfig)).get();
+        return new PlanOptimizers(metadata, sqlParser, featuresConfig, forceSingleNode, new MBeanExporter(new TestingMBeanServer()), statsCalculator).get();
     }
 
     public Plan createPlan(Session session, @Language("SQL") String sql, List<PlanOptimizer> optimizers)
@@ -805,7 +774,6 @@ public class LocalQueryRunner
                 accessControl,
                 sqlParser,
                 statsCalculator,
-                costCalculator,
                 dataDefinitionTask);
         Analyzer analyzer = new Analyzer(session, metadata, sqlParser, accessControl, Optional.of(queryExplainer), parameters);
 
@@ -918,16 +886,12 @@ public class LocalQueryRunner
     {
         SplitSource splitSource = splitManager.getSplits(session, handle, UNGROUPED_SCHEDULING);
         List<Split> splits = new ArrayList<>();
+        splits.addAll(getFutureValue(splitSource.getNextBatch(1000)));
         while (!splitSource.isFinished()) {
-            splits.addAll(getNextBatch(splitSource));
+            splits.addAll(getFutureValue(splitSource.getNextBatch(1000)));
         }
         checkArgument(splits.size() == 1, "Expected only one split for a local query, but got %s splits", splits.size());
         return splits.get(0);
-    }
-
-    private static List<Split> getNextBatch(SplitSource splitSource)
-    {
-        return getFutureValue(splitSource.getNextBatch(NOT_PARTITIONED, Lifespan.taskWide(), 1000)).getSplits();
     }
 
     private static List<TableScanNode> findTableScanNodes(PlanNode node)

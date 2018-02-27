@@ -13,7 +13,6 @@
  */
 package com.facebook.presto.sql.planner.iterative;
 
-import com.facebook.presto.cost.PlanNodeCostEstimate;
 import com.facebook.presto.cost.PlanNodeStatsEstimate;
 import com.facebook.presto.sql.planner.PlanNodeIdAllocator;
 import com.facebook.presto.sql.planner.plan.PlanNode;
@@ -130,18 +129,17 @@ public class Memo
         incrementReferenceCounts(node, group);
         getGroup(group).membership = node;
         decrementReferenceCounts(old, group);
-        evictStatisticsAndCost(group);
+        evictStatistics(group);
 
         return node;
     }
 
-    private void evictStatisticsAndCost(int group)
+    private void evictStatistics(int group)
     {
         getGroup(group).stats = null;
-        getGroup(group).cumulativeCost = null;
         for (int parentGroup : getGroup(group).incomingReferences.elementSet()) {
             if (parentGroup != ROOT_GROUP_REF) {
-                evictStatisticsAndCost(parentGroup);
+                evictStatistics(parentGroup);
             }
         }
     }
@@ -155,19 +153,9 @@ public class Memo
     {
         Group group = getGroup(groupId);
         if (group.stats != null) {
-            evictStatisticsAndCost(groupId); // cost is derived from stats, also needs eviction
+            evictStatistics(groupId);
         }
         group.stats = requireNonNull(stats, "stats is null");
-    }
-
-    public Optional<PlanNodeCostEstimate> getCumulativeCost(int group)
-    {
-        return Optional.ofNullable(getGroup(group).cumulativeCost);
-    }
-
-    public void storeCumulativeCost(int group, PlanNodeCostEstimate cost)
-    {
-        getGroup(group).cumulativeCost = requireNonNull(cost, "cost is null");
     }
 
     private void incrementReferenceCounts(PlanNode fromNode, int fromGroup)
@@ -255,8 +243,6 @@ public class Memo
         private Multiset<Integer> incomingReferences = HashMultiset.create();
         @Nullable
         private PlanNodeStatsEstimate stats;
-        @Nullable
-        private PlanNodeCostEstimate cumulativeCost;
 
         private Group(PlanNode member)
         {

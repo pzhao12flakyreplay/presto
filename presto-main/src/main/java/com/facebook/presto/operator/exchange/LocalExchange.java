@@ -245,6 +245,7 @@ public class LocalExchange
         }
 
         sources.forEach(LocalExchangeSource::finish);
+        memoryManager.setNoBlockOnFull();
     }
 
     private static void checkNotHoldsLock(Object lock)

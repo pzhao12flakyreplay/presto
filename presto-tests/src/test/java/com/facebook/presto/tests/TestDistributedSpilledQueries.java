@@ -32,7 +32,7 @@ public class TestDistributedSpilledQueries
         super(TestDistributedSpilledQueries::createQueryRunner);
     }
 
-    public static DistributedQueryRunner createQueryRunner()
+    private static DistributedQueryRunner createQueryRunner()
             throws Exception
     {
         Session defaultSession = testSessionBuilder()

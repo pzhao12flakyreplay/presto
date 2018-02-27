@@ -37,7 +37,6 @@ public class HiveMetadataFactory
     private final boolean bucketWritingEnabled;
     private final boolean skipDeletionForAlter;
     private final boolean writesToNonManagedTablesEnabled;
-    private final boolean createsOfNonManagedTablesEnabled;
     private final long perTransactionCacheMaximumSize;
     private final ExtendedHiveMetastore metastore;
     private final HdfsEnvironment hdfsEnvironment;
@@ -76,7 +75,6 @@ public class HiveMetadataFactory
                 hiveClientConfig.isSkipDeletionForAlter(),
                 hiveClientConfig.isBucketWritingEnabled(),
                 hiveClientConfig.getWritesToNonManagedTablesEnabled(),
-                hiveClientConfig.getCreatesOfNonManagedTablesEnabled(),
                 hiveClientConfig.getPerTransactionMetastoreCacheMaximumSize(),
                 typeManager,
                 locationService,
@@ -97,7 +95,6 @@ public class HiveMetadataFactory
             boolean skipDeletionForAlter,
             boolean bucketWritingEnabled,
             boolean writesToNonManagedTablesEnabled,
-            boolean createsOfNonManagedTablesEnabled,
             long perTransactionCacheMaximumSize,
             TypeManager typeManager,
             LocationService locationService,
@@ -111,7 +108,6 @@ public class HiveMetadataFactory
         this.skipDeletionForAlter = skipDeletionForAlter;
         this.bucketWritingEnabled = bucketWritingEnabled;
         this.writesToNonManagedTablesEnabled = writesToNonManagedTablesEnabled;
-        this.createsOfNonManagedTablesEnabled = createsOfNonManagedTablesEnabled;
         this.perTransactionCacheMaximumSize = perTransactionCacheMaximumSize;
 
         this.metastore = requireNonNull(metastore, "metastore is null");
@@ -151,7 +147,6 @@ public class HiveMetadataFactory
                 allowCorruptWritesForTesting,
                 bucketWritingEnabled,
                 writesToNonManagedTablesEnabled,
-                createsOfNonManagedTablesEnabled,
                 typeManager,
                 locationService,
                 tableParameterCodec,

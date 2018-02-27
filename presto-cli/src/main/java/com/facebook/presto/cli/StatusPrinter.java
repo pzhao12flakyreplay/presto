@@ -57,12 +57,12 @@ public class StatusPrinter
 
     private boolean debug;
 
-    public StatusPrinter(StatementClient client, PrintStream out, boolean debug)
+    public StatusPrinter(StatementClient client, PrintStream out)
     {
         this.client = client;
         this.out = out;
         this.console = new ConsolePrinter(out);
-        this.debug = debug;
+        this.debug = client.isDebug();
     }
 
 /*
@@ -86,7 +86,7 @@ Parallelism: 2.5
     {
         long lastPrint = System.nanoTime();
         try {
-            while (client.isRunning()) {
+            while (client.isValid()) {
                 try {
                     // exit status loop if there is pending output
                     if (client.currentData().getData() != null) {

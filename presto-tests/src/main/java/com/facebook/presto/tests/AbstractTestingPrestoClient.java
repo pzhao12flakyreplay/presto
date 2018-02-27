@@ -23,7 +23,6 @@ import com.facebook.presto.metadata.MetadataUtil;
 import com.facebook.presto.metadata.QualifiedObjectName;
 import com.facebook.presto.metadata.QualifiedTablePrefix;
 import com.facebook.presto.server.testing.TestingPrestoServer;
-import com.facebook.presto.spi.QueryId;
 import com.facebook.presto.spi.type.Type;
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
@@ -41,7 +40,7 @@ import java.util.concurrent.TimeUnit;
 
 import static com.facebook.presto.spi.type.TypeSignature.parseTypeSignature;
 import static com.facebook.presto.transaction.TransactionBuilder.transaction;
-import static com.google.common.base.Preconditions.checkState;
+import static com.google.common.base.Verify.verify;
 import static com.google.common.collect.Iterables.transform;
 import static java.util.Objects.requireNonNull;
 
@@ -78,18 +77,15 @@ public abstract class AbstractTestingPrestoClient<T>
     {
         ResultsSession<T> resultsSession = getResultSession(session);
 
-        ClientSession clientSession = toClientSession(session, prestoServer.getBaseUrl(), new Duration(2, TimeUnit.MINUTES));
+        ClientSession clientSession = toClientSession(session, prestoServer.getBaseUrl(), true, new Duration(2, TimeUnit.MINUTES));
 
         try (StatementClient client = new StatementClient(httpClient, clientSession, sql)) {
-            while (client.isRunning()) {
+            while (client.isValid()) {
                 resultsSession.addResults(client.currentStatusInfo(), client.currentData());
                 client.advance();
             }
 
-            checkState(client.isFinished());
-            QueryError error = client.finalStatusInfo().getError();
-
-            if (error == null) {
+            if (!client.isFailed()) {
                 QueryStatusInfo results = client.finalStatusInfo();
                 if (results.getUpdateType() != null) {
                     resultsSession.setUpdateType(results.getUpdateType());
@@ -99,9 +95,11 @@ public abstract class AbstractTestingPrestoClient<T>
                 }
 
                 T result = resultsSession.build(client.getSetSessionProperties(), client.getResetSessionProperties());
-                return new ResultWithQueryId<>(new QueryId(results.getId()), result);
+                return new ResultWithQueryId<>(results.getId(), result);
             }
 
+            QueryError error = client.finalStatusInfo().getError();
+            verify(error != null, "no error");
             if (error.getFailureInfo() != null) {
                 throw error.getFailureInfo().toException();
             }
@@ -113,7 +111,7 @@ public abstract class AbstractTestingPrestoClient<T>
         }
     }
 
-    private static ClientSession toClientSession(Session session, URI server, Duration clientRequestTimeout)
+    private static ClientSession toClientSession(Session session, URI server, boolean debug, Duration clientRequestTimeout)
     {
         ImmutableMap.Builder<String, String> properties = ImmutableMap.builder();
         properties.putAll(session.getSystemProperties());
@@ -136,6 +134,7 @@ public abstract class AbstractTestingPrestoClient<T>
                 properties.build(),
                 session.getPreparedStatements(),
                 session.getTransactionId().map(Object::toString).orElse(null),
+                debug,
                 clientRequestTimeout);
     }
 

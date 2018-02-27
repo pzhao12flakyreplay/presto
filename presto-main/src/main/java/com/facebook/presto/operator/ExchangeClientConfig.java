@@ -62,16 +62,17 @@ public class ExchangeClientConfig
         return this;
     }
 
-    @Deprecated
+    @NotNull
+    @MinDuration("1ms")
     public Duration getMinErrorDuration()
     {
-        return maxErrorDuration;
+        return minErrorDuration;
     }
 
-    @Deprecated
     @Config("exchange.min-error-duration")
     public ExchangeClientConfig setMinErrorDuration(Duration minErrorDuration)
     {
+        this.minErrorDuration = minErrorDuration;
         return this;
     }
 

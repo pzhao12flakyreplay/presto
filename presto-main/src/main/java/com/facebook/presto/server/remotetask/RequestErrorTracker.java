@@ -42,7 +42,6 @@ import static com.facebook.presto.spi.StandardErrorCode.REMOTE_TASK_ERROR;
 import static com.facebook.presto.spi.StandardErrorCode.TOO_MANY_REQUESTS_FAILED;
 import static com.facebook.presto.util.Failures.WORKER_NODE_ERROR;
 import static java.lang.String.format;
-import static java.util.Objects.requireNonNull;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
@@ -59,13 +58,13 @@ class RequestErrorTracker
 
     private final Queue<Throwable> errorsSinceLastSuccess = new ConcurrentLinkedQueue<>();
 
-    public RequestErrorTracker(TaskId taskId, URI taskUri, Duration maxErrorDuration, ScheduledExecutorService scheduledExecutor, String jobDescription)
+    public RequestErrorTracker(TaskId taskId, URI taskUri, Duration minErrorDuration, Duration maxErrorDuration, ScheduledExecutorService scheduledExecutor, String jobDescription)
     {
-        this.taskId = requireNonNull(taskId, "taskId is null");
-        this.taskUri = requireNonNull(taskUri, "taskUri is null");
-        this.scheduledExecutor = requireNonNull(scheduledExecutor, "scheduledExecutor is null");
-        this.backoff = new Backoff(requireNonNull(maxErrorDuration, "maxErrorDuration is null"));
-        this.jobDescription = requireNonNull(jobDescription, "jobDescription is null");
+        this.taskId = taskId;
+        this.taskUri = taskUri;
+        this.scheduledExecutor = scheduledExecutor;
+        this.backoff = new Backoff(minErrorDuration, maxErrorDuration);
+        this.jobDescription = jobDescription;
     }
 
     public ListenableFuture<?> acquireRequestPermit()
@@ -88,7 +87,6 @@ class RequestErrorTracker
         if (backoff.getFailureCount() == 0) {
             requestSucceeded();
         }
-        backoff.startRequest();
     }
 
     public void requestSucceeded()
@@ -128,13 +126,12 @@ class RequestErrorTracker
             // it is weird to mark the task failed locally and then cancel the remote task, but there is no way to tell a remote task that it is failed
             PrestoException exception = new PrestoTransportException(TOO_MANY_REQUESTS_FAILED,
                     fromUri(taskUri),
-                    format("%s (%s %s - %s failures, failure duration %s, total failed request time %s)",
+                    format("%s (%s %s - %s failures, time since last success %s)",
                             WORKER_NODE_ERROR,
                             jobDescription,
                             taskUri,
                             backoff.getFailureCount(),
-                            backoff.getFailureDuration().convertTo(SECONDS),
-                            backoff.getFailureRequestTimeTotal().convertTo(SECONDS)));
+                            backoff.getTimeSinceLastSuccess().convertTo(SECONDS)));
             errorsSinceLastSuccess.forEach(exception::addSuppressed);
             throw exception;
         }

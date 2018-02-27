@@ -47,9 +47,9 @@ public class BasicQueryStats
     private final int runningDrivers;
     private final int completedDrivers;
 
-    private final double cumulativeUserMemory;
-    private final DataSize userMemoryReservation;
-    private final DataSize peakUserMemoryReservation;
+    private final double cumulativeMemory;
+    private final DataSize totalMemoryReservation;
+    private final DataSize peakMemoryReservation;
     private final Duration totalCpuTime;
 
     private final boolean fullyBlocked;
@@ -66,9 +66,9 @@ public class BasicQueryStats
             int queuedDrivers,
             int runningDrivers,
             int completedDrivers,
-            double cumulativeUserMemory,
-            DataSize userMemoryReservation,
-            DataSize peakUserMemoryReservation,
+            double cumulativeMemory,
+            DataSize totalMemoryReservation,
+            DataSize peakMemoryReservation,
             Duration totalCpuTime,
             boolean fullyBlocked,
             Set<BlockedReason> blockedReasons,
@@ -89,9 +89,9 @@ public class BasicQueryStats
         checkArgument(completedDrivers >= 0, "completedDrivers is negative");
         this.completedDrivers = completedDrivers;
 
-        this.cumulativeUserMemory = cumulativeUserMemory;
-        this.userMemoryReservation = userMemoryReservation;
-        this.peakUserMemoryReservation = peakUserMemoryReservation;
+        this.cumulativeMemory = cumulativeMemory;
+        this.totalMemoryReservation = totalMemoryReservation;
+        this.peakMemoryReservation = peakMemoryReservation;
         this.totalCpuTime = totalCpuTime;
 
         this.fullyBlocked = fullyBlocked;
@@ -110,8 +110,8 @@ public class BasicQueryStats
                 queryStats.getQueuedDrivers(),
                 queryStats.getRunningDrivers(),
                 queryStats.getCompletedDrivers(),
-                queryStats.getCumulativeUserMemory(),
-                queryStats.getUserMemoryReservation(),
+                queryStats.getCumulativeMemory(),
+                queryStats.getTotalMemoryReservation(),
                 queryStats.getPeakUserMemoryReservation(),
                 queryStats.getTotalCpuTime(),
                 queryStats.isFullyBlocked(),
@@ -168,21 +168,21 @@ public class BasicQueryStats
     }
 
     @JsonProperty
-    public double getCumulativeUserMemory()
+    public double getCumulativeMemory()
     {
-        return cumulativeUserMemory;
+        return cumulativeMemory;
     }
 
     @JsonProperty
-    public DataSize getUserMemoryReservation()
+    public DataSize getTotalMemoryReservation()
     {
-        return userMemoryReservation;
+        return totalMemoryReservation;
     }
 
     @JsonProperty
-    public DataSize getPeakUserMemoryReservation()
+    public DataSize getPeakMemoryReservation()
     {
-        return peakUserMemoryReservation;
+        return peakMemoryReservation;
     }
 
     @JsonProperty

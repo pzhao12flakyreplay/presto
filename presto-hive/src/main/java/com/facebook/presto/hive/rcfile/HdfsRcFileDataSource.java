@@ -15,7 +15,6 @@ package com.facebook.presto.hive.rcfile;
 
 import com.facebook.presto.hive.FileFormatDataSourceStats;
 import com.facebook.presto.rcfile.RcFileDataSource;
-import com.facebook.presto.rcfile.RcFileDataSourceId;
 import org.apache.hadoop.fs.FSDataInputStream;
 
 import java.io.IOException;
@@ -40,12 +39,6 @@ public class HdfsRcFileDataSource
         this.size = size;
         checkArgument(size >= 0, "size is negative");
         this.stats = requireNonNull(stats, "stats is null");
-    }
-
-    @Override
-    public RcFileDataSourceId getId()
-    {
-        return new RcFileDataSourceId(path);
     }
 
     @Override

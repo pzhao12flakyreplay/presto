@@ -28,6 +28,7 @@ public class TestCompilerConfig
     public void testDefaults()
     {
         assertRecordedDefaults(recordDefaults(CompilerConfig.class)
+                .setInterpreterEnabled(false)
                 .setExpressionCacheSize(10_000));
     }
 
@@ -35,10 +36,12 @@ public class TestCompilerConfig
     public void testExplicitPropertyMappings()
     {
         Map<String, String> properties = new ImmutableMap.Builder<String, String>()
+                .put("compiler.interpreter-enabled", "true")
                 .put("compiler.expression-cache-size", "52")
                 .build();
 
         CompilerConfig expected = new CompilerConfig()
+                .setInterpreterEnabled(true)
                 .setExpressionCacheSize(52);
 
         assertFullMapping(properties, expected);

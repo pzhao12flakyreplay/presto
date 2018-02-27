@@ -41,7 +41,6 @@ import java.util.function.Supplier;
 
 import static com.facebook.presto.kafka.KafkaHandleResolver.convertColumnHandle;
 import static com.facebook.presto.kafka.KafkaHandleResolver.convertTableHandle;
-import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 
 /**
@@ -172,21 +171,13 @@ public class KafkaMetadata
 
         ImmutableMap.Builder<SchemaTableName, List<ColumnMetadata>> columns = ImmutableMap.builder();
 
-        List<SchemaTableName> tableNames;
-        if (prefix.getTableName() == null) {
-            tableNames = listTables(session, prefix.getSchemaName());
-        }
-        else {
-            tableNames = ImmutableList.of(new SchemaTableName(prefix.getSchemaName(), prefix.getTableName()));
-        }
+        List<SchemaTableName> tableNames = prefix.getSchemaName() == null ? listTables(session, null) : ImmutableList.of(new SchemaTableName(prefix.getSchemaName(), prefix.getTableName()));
 
         for (SchemaTableName tableName : tableNames) {
-            try {
-                columns.put(tableName, getTableMetadata(tableName).getColumns());
-            }
-            catch (TableNotFoundException e) {
-                // Normally it would mean the table disappeared during listing operation
-                throw new IllegalStateException(format("Table %s cannot be gone because tables are statically defined", tableName), e);
+            ConnectorTableMetadata tableMetadata = getTableMetadata(tableName);
+            // table can disappear during listing operation
+            if (tableMetadata != null) {
+                columns.put(tableName, tableMetadata.getColumns());
             }
         }
         return columns.build();

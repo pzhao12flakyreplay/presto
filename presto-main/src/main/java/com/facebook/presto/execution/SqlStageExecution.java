@@ -209,9 +209,9 @@ public final class SqlStageExecution
         getAllTasks().forEach(RemoteTask::abort);
     }
 
-    public long getUserMemoryReservation()
+    public long getMemoryReservation()
     {
-        return stateMachine.getUserMemoryReservation();
+        return stateMachine.getMemoryReservation();
     }
 
     public synchronized Duration getTotalCpuTime()

@@ -59,6 +59,7 @@ public class ExchangeClient
     private final long bufferCapacity;
     private final DataSize maxResponseSize;
     private final int concurrentRequestMultiplier;
+    private final Duration minErrorDuration;
     private final Duration maxErrorDuration;
     private final HttpClient httpClient;
     private final ScheduledExecutorService scheduler;
@@ -98,6 +99,7 @@ public class ExchangeClient
             DataSize bufferCapacity,
             DataSize maxResponseSize,
             int concurrentRequestMultiplier,
+            Duration minErrorDuration,
             Duration maxErrorDuration,
             HttpClient httpClient,
             ScheduledExecutorService scheduler,
@@ -107,6 +109,7 @@ public class ExchangeClient
         this.bufferCapacity = bufferCapacity.toBytes();
         this.maxResponseSize = maxResponseSize;
         this.concurrentRequestMultiplier = concurrentRequestMultiplier;
+        this.minErrorDuration = minErrorDuration;
         this.maxErrorDuration = maxErrorDuration;
         this.httpClient = httpClient;
         this.scheduler = scheduler;
@@ -154,6 +157,7 @@ public class ExchangeClient
         HttpPageBufferClient client = new HttpPageBufferClient(
                 httpClient,
                 maxResponseSize,
+                minErrorDuration,
                 maxErrorDuration,
                 location,
                 new ExchangeClientCallback(),

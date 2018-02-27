@@ -76,8 +76,8 @@ public class StageStateMachine
     private final Distribution scheduleTaskDistribution = new Distribution();
     private final Distribution addSplitDistribution = new Distribution();
 
-    private final AtomicLong peakUserMemory = new AtomicLong();
-    private final AtomicLong currentUserMemory = new AtomicLong();
+    private final AtomicLong peakMemory = new AtomicLong();
+    private final AtomicLong currentMemory = new AtomicLong();
 
     public StageStateMachine(
             StageId stageId,
@@ -178,16 +178,21 @@ public class StageStateMachine
         return failed;
     }
 
-    public long getUserMemoryReservation()
+    public long getPeakMemoryInBytes()
     {
-        return currentUserMemory.get();
+        return peakMemory.get();
     }
 
-    public void updateMemoryUsage(long deltaUserMemoryInBytes)
+    public long getMemoryReservation()
     {
-        long currentMemoryValue = currentUserMemory.addAndGet(deltaUserMemoryInBytes);
-        if (currentMemoryValue > peakUserMemory.get()) {
-            peakUserMemory.updateAndGet(x -> currentMemoryValue > x ? currentMemoryValue : x);
+        return currentMemory.get();
+    }
+
+    public void updateMemoryUsage(long deltaMemoryInBytes)
+    {
+        long currentMemoryValue = currentMemory.addAndGet(deltaMemoryInBytes);
+        if (currentMemoryValue > peakMemory.get()) {
+            peakMemory.updateAndGet(x -> currentMemoryValue > x ? currentMemoryValue : x);
         }
     }
 
@@ -212,9 +217,9 @@ public class StageStateMachine
         int blockedDrivers = 0;
         int completedDrivers = 0;
 
-        long cumulativeUserMemory = 0;
-        long userMemoryReservation = 0;
-        long peakUserMemoryReservation = peakUserMemory.get();
+        long cumulativeMemory = 0;
+        long totalMemoryReservation = 0;
+        long peakMemoryReservation = getPeakMemoryInBytes();
 
         long totalScheduledTime = 0;
         long totalCpuTime = 0;
@@ -254,8 +259,8 @@ public class StageStateMachine
             blockedDrivers += taskStats.getBlockedDrivers();
             completedDrivers += taskStats.getCompletedDrivers();
 
-            cumulativeUserMemory += taskStats.getCumulativeUserMemory();
-            userMemoryReservation += taskStats.getUserMemoryReservation().toBytes();
+            cumulativeMemory += taskStats.getCumulativeMemory();
+            totalMemoryReservation += taskStats.getMemoryReservation().toBytes();
 
             totalScheduledTime += taskStats.getTotalScheduledTime().roundTo(NANOSECONDS);
             totalCpuTime += taskStats.getTotalCpuTime().roundTo(NANOSECONDS);
@@ -302,9 +307,9 @@ public class StageStateMachine
                 blockedDrivers,
                 completedDrivers,
 
-                cumulativeUserMemory,
-                succinctBytes(userMemoryReservation),
-                succinctBytes(peakUserMemoryReservation),
+                cumulativeMemory,
+                succinctBytes(totalMemoryReservation),
+                succinctBytes(peakMemoryReservation),
                 succinctDuration(totalScheduledTime, NANOSECONDS),
                 succinctDuration(totalCpuTime, NANOSECONDS),
                 succinctDuration(totalUserTime, NANOSECONDS),
